@@ -30,10 +30,10 @@ Key items here:
 **TKLServerHost** - the IP of your Python server. Use localhost if it's running on the same machine
 **TKLServerPort** - Port used by the Python server.
 
-bOLStatsEnabled - by default, UT2004 only allows a single stats class. If you enable this and have OLStats installed, this will spawn the OLStats logger and pass through all stats events letting it create a tradional log
-bFlavorHeading - adds a "flavor" text to CTF and BR match summaries based on the score. Current headings really need some adjustment.
-bReportScoreEvents - this will send event whenever a team scores (outside of TDM or DOM) or completes an objective in AS
-bPostCapSummary - this will add a summary of the captures to the post-match summary of a CTF/BR games
+**bOLStatsEnabled** - by default, UT2004 only allows a single stats class. If you enable this and have OLStats installed, this will spawn the OLStats logger and pass through all stats events letting it create a tradional log
+**bFlavorHeading** - adds a "flavor" text to CTF and BR match summaries based on the score. Current headings really need some adjustment.
+**bReportScoreEvents** - this will send event whenever a team scores (outside of TDM or DOM) or completes an objective in AS
+**bPostCapSummary** - this will add a summary of the captures to the post-match summary of a CTF/BR games
 4. Start a server with `LDiscordLink.MutLDiscordReport` mutator
 
 
