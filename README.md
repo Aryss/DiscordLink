@@ -16,7 +16,7 @@ Setup steps:
 2. Run the python server, the console will say it's started and listening
 3. Add the following entries to the end of your server config (proper WebAdmin support coming, but doesn't quite work for now):
 
-[LDiscordLink.TKLMutatorTcpLinkClient]
+```[LDiscordLink.TKLMutatorTcpLinkClient]
 TKLServerHost=[your Py server IP]
 TKLServerPort=[your Py server port]
 MaxRetries=5
@@ -27,7 +27,7 @@ bOLStatsEnabled=False
 bFlavorHeading=True
 bReportMatchStart=True
 bReportScoreEvents=True
-bPostCapSummary=True
+bPostCapSummary=True```
 
 4. Start a server with LDiscordLink.MutLDiscordReport/Discord Link mutator. You should see a connection appear in Python server log.
 
