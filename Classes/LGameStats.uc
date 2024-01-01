@@ -16,7 +16,9 @@ var globalconfig bool bReportScoreEvents;
 var globalconfig bool bReportSpreesStreaks;
 var globalconfig bool bPostCapSummary;
 var globalconfig bool bPostObjSummary;
-var globalconfig int  Priv;						   // The privileges required to modify settings via WebAdmin
+//var globalconfig bool bEnableDebugLog;         // this will create a separate Log file in Userlogs
+var globalconfig int  Priv;					   // The privileges required to modify settings via WebAdmin
+
 
 var bool bWasOvertime;
 var bool bUTCompIsPresent;
@@ -112,11 +114,11 @@ struct ScorersAssistants{
 // The available values for type are:
 // 0 - shutout victory (a big score shut-out victory f.e. 7-0 or 5-0)
 // 1 - solid (3 point difference - 6-2, 4-1 and so on )
-// 2 - hard-fought (1 point difference)
-// 3 - willed victory (was losing but retrieved the lead and won) not implemented yet;
+// 2 - close score (1 point difference)
+// 3 - comeback (was losing but took the lead and won) not implemented yet;
 // 4 - overtime win
-// 5 - willed overtime win (managed to tie the match and win the overtime) not implemented yet;
-// 6 - usual win
+// 5 - comeback OT victory (managed to tie the match and win the overtime) not implemented yet;
+// 6 - any other victory
 // 7 - tie
 // 8 - 0:0 tie
 // 9 - big score match (9:5 and so on, losing team must score more at least 5 goals for this to be used)
@@ -139,6 +141,9 @@ var localized string SectionName;
 var localized string SummaryNameProperty;
 
 var string CurrentSummaryName;
+
+// this will be a separate debug log
+// var FileLog TempLog;
 
 var Teams myTeams[2];                             // TeamInfo
 var Controller FirstTouchBlue;                    // temp variable used for ??? deprecated?
@@ -169,10 +174,10 @@ function String FormatTime( int Seconds, optional bool DoNotFix)
   local String Time;
 
 //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-// That's the fix for the Level.TimeDilation
+// This is a fix for the Level.TimeDilation
 // which is always equal to 1.1, so for the
 // game, 20 minutes real time are equal to 22
-// of ingame time. This resulte in showing
+// of in-game time. This resulte in showing
 // that a 20 min game lasted 22 mins.
 	if (!DoNotFix){
   	  fixedSeconds = int(Seconds / Level.TimeDilation);
@@ -477,7 +482,7 @@ function string CreateHeading(String LastScorer){
   local array<string> SuitableHeadings; // The array with headings of the type that suits for this game score
 
   point = "capture";
-  TotalScore = int(winners.Score + losers.Score);  // setting the TotalScore
+  
   
   // defining who's who
   if (GRI.Teams[0].Score > GRI.Teams[1].Score){
@@ -488,6 +493,8 @@ function string CreateHeading(String LastScorer){
     winners = GRI.Teams[1];
     losers = GRI.Teams[0];
   }
+  
+  TotalScore = int(winners.Score + losers.Score);  // setting the TotalScore  
   
   if (!bFlavorHeading){
     return winners.TeamName@"wins the match!";
@@ -746,30 +753,7 @@ function PreBeginPlay()
 
 function PostBeginPlay()
 {
-  local GameObjective GO;
 
-/*
-struct ASObjectives{
-  var string ObjDescription;
-  var bool bOptional;
-  var int RedTime;
-  var int Blue Time;
-}
-*/
-  
-  
-  if (ASGameinfo(Level.Game) != None){
-  // Caching Assault objectives to build track and build summary.
-    ASGRI = ASGameReplicationInfo(GRI);
-  
-    ForEach AllActors(class'GameObjective', GO)
-    {
-      if ( GO.bBotOnlyObjective )	// ignore bot only objectives
-		continue;
-	  ASObjectives[ASObjectives.Length].ObjDescription = GO.ObjectiveDescription;
-	  ASObjectives[ASObjectives.Length].bOptional = GO.bOptionalObjective;
-    }
-  }
   
   Super.PostBeginPlay();
   
@@ -786,9 +770,33 @@ function NewGame()
 {
   local Mutator Mut;
   local CTFFlag testFlag;
-
+  local GameObjective GO;
+  
   GRI = Level.Game.GameReplicationInfo;
+  
+/*
+struct ASObjectives{
+  var string ObjDescription;
+  var bool bOptional;
+  var int RedTime;
+  var int Blue Time;
+}
 
+  
+  
+  if (ASGameinfo(Level.Game) != None){
+  // Caching Assault objectives to build track and build summary.
+    ASGRI = ASGameReplicationInfo(GRI);
+  
+    ForEach AllActors(class'GameObjective', GO)
+    {
+      if ( GO.bBotOnlyObjective )	// ignore bot only objectives
+		continue;
+	  ASObjectives[ASObjectives.Length].ObjDescription = GO.ObjectiveDescription;
+	  ASObjectives[ASObjectives.Length].bOptional = GO.bOptionalObjective;
+    }
+  }
+*/
   foreach AllActors(class'Mutator',Mut)
   {
     if (Left(Mut.FriendlyName, 6) ~= "UTComp"){
@@ -883,7 +891,7 @@ function StartGame()
 	MatchStartTime = Level.TimeSeconds;
 
     if (ASGameinfo(Level.Game) !=  None ){
-	  DRP.SendMSG("ASMST"$Level.TimeSeconds$";"$ASGameinfo(Level.Game).RoundTimeLimit$";"$ASGameinfo(Level.Game).ReinforcementsFreq$"s;"$ASGameinfo(Level.Game).MaxRounds$";"$GetMapFileName());
+	  DRP.SendMSG("ASMST"$Level.TimeSeconds$";"$ASGameinfo(Level.Game).RoundTimeLimit$";"$ASGameinfo(Level.Game).ReinforcementsFreq$"s;"$(ASGameinfo(Level.Game).RoundLimit)$";"$GetMapFileName());
 	}
 	else {
 	  DRP.SendMSG("MSTRT"$Level.TimeSeconds$";"$Level.Game.GoalScore$";"$Level.Game.TimeLimit$";"$Level.Game.default.GameName$";"$GetMapFileName());
@@ -915,10 +923,10 @@ function ScoreEvent(PlayerReplicationInfo Who, float Points, string Desc)
   }
  
   if (Desc == "ball_cap_final"){
-    DRP.SendMSG("DBCFC"$TimeStamp()$";"$RedScore$";"$BlueScore$";"$Who.PlayerName$";"$Who.Team.TeamName$";"$Who.Team.TeamIndex);
+    DRP.SendMSG("BRTCD"$TimeStamp()$";"$RedScore$";"$BlueScore$";"$Who.PlayerName$";"$Who.Team.TeamName$";"$Who.Team.TeamIndex);
   }
   if (Desc == "ball_thrown_final"){
-    DRP.SendMSG("DBTFC"$TimeStamp()$";"$RedScore$";"$BlueScore$";"$Who.PlayerName$";"$Who.Team.TeamName$";"$Who.Team.TeamIndex);
+    DRP.SendMSG("BRTSS"$TimeStamp()$";"$RedScore$";"$BlueScore$";"$Who.PlayerName$";"$Who.Team.TeamName$";"$Who.Team.TeamIndex);
   }
   
   if (OLSLogger!=None){
@@ -940,7 +948,7 @@ function TeamScoreEvent(int Team, float Points, string Desc)
     OLSLogger.TeamScoreEvent(Team,Points,Desc);
   }   
 
-  if (!bMatchStarted)
+  if (!bMatchStarted || Desc ~= "tdm_frag" || Desc ~= "team_frag" )
 	return;
   
   GRI = Level.Game.GameReplicationInfo;  
@@ -1083,8 +1091,18 @@ function TeamScoreEvent(int Team, float Points, string Desc)
 
   log("[DiscordLink] TeamScoreEvent:"$Desc);	
   if (Desc ~= "enemy_core_destroyed"){
-	DRP.SendMSG("ONSCD"$TimeStamp()$";"$RedScore$";"$BlueScore$";"$Team);
+	DRP.SendMSG("ONSCD"$TimeStamp()$";"$RedScore$";"$BlueScore$";"$Team$";"$GRI.Teams[Team].TeamName);
   }
+  
+  if (Desc ~= "round_win"){
+	DRP.SendMSG("TGRND"$TimeStamp()$";"$RedScore$";"$BlueScore$";"$Team$";"$GRI.Teams[Team].TeamName);
+  }
+  
+  if (Desc ~= "pair_of_round_winner"){
+    ASGRI = ASGameReplicationInfo(GRI);
+	DRP.SendMSG("ASRDW"$TimeStamp()$";"$RedScore$";"$BlueScore$";"$Team$";"$ASGRI.GetRoundWinnerString());
+  }
+
 }
 
 // ============================================================================
@@ -1190,10 +1208,13 @@ function Timer(){
         PotentialRedScorers.SecondAssistant = None;
     }
   }
-
+  
   // overtime check
-  if (Level.Game.bOverTime)
+  if (Level.Game.bOverTime && !bWasOvertime){
+   DRP.SendMSG("GENOT"$Timestamp()$";"$GRI.Teams[0].Score$";"$GRI.Teams[1].Score); // we still need to send timestamp as it's used by the Py server deduplication feature
    bOvertime = true;
+   bWasOvertime = true;
+  }
 }
 
 // ============================================================================
@@ -1266,7 +1287,6 @@ function EndGame(string Reason)
   local string Scorers;
   local string matchinfo;
   local string LastScorer;
-  local bool bPosted;  
   local array<PlayerReplicationInfo> PRIs;
   local PlayerReplicationInfo PRI,t;
   
@@ -1283,9 +1303,16 @@ function EndGame(string Reason)
   }
 	
   ASGRI = ASGameReplicationInfo(GRI);
+  
+  if (GRI.Teams[0].Score > GRI.Teams[1].Score){
+    Winners = GRI.Teams[0];
+  }
+  else{
+    Winners = GRI.Teams[1];
+  }
     
   SetTimer(0.5, false);
-  if (Level.Game.bTeamGame){
+  if (CTFGame(Level.Game) != None){
     LastScorer = Goals[Goals.Length-1].Scorer.PlayerName;
   }
   matchinfo = TodayHourServerMap();
@@ -1361,7 +1388,9 @@ function EndGame(string Reason)
 
 	RedScoreAttempts = int(myTeams[0].thisTeam.Score)$"/"$myTeams[0].TimesTouchedFlag$"  ("$GetPercentage(myTeams[0].thisTeam.Score, float(myTeams[0].TimesTouchedFlag))$")";
 	BlueScoreAttempts = int(myTeams[1].thisTeam.Score)$"/"$myTeams[1].TimesTouchedFlag$"  ("$GetPercentage(myTeams[1].thisTeam.Score, float(myTeams[1].TimesTouchedFlag))$")";
-    Heading = CreateHeading(LastScorer);
+    if (CTFGame(Level.Game)!= None ){
+	  Heading = CreateHeading(LastScorer);
+	}
 	ThreeStars = GetThreeStars();
 	FinalScore = int(myTeams[0].thisTeam.Score)$":"$int(myTeams[1].thisTeam.Score);
 	if (bOverTime){
@@ -1378,36 +1407,46 @@ function EndGame(string Reason)
       }
     }
   }
+  
+  // rough attempt to fix what I assume is a stomp on sending data that happens if the last BR/CTF capture was in OT or hit goal score that prevents both the cap and summaary being posted. This probably needs to be fixed in the mutator code itself where it processes the queue.
+
 	  
   if(CTFGame(Level.Game) != None){
+	Log("[DiscordLink] Sending CTF Summary");
 	if (bPostCapSummary)
 		DRP.SendMSG("CTFES"$Rand(1000)$";"$Winners.TeamIndex$";"$FinalScore$";"$Heading$";"$ThreeStars$";"$RedScoreAttempts$";"$BlueScoreAttempts$";"$RedPlayers$";"$BluePlayers$";"$RedScores$";"$BlueScores$";"$RedCaptures$";"$BlueCaptures$";"$matchinfo$";"$Scorers);
 	else
 		DRP.SendMSG("CTFES"$Rand(1000)$";"$Winners.TeamIndex$";"$FinalScore$";"$Heading$";"$ThreeStars$";"$RedScoreAttempts$";"$BlueScoreAttempts$";"$RedPlayers$";"$BluePlayers$";"$RedScores$";"$BlueScores$";"$RedCaptures$";"$BlueCaptures$";"$matchinfo);
-	bPosted = True;
+	return;
   }
   
   if(ASGameInfo(Level.Game) != None){
-	if (bPostObjSummary)
+	Log("[DiscordLink] Sending AS Summary");
+//	if (bPostObjSummary)
 //		DRP.SendMSG("ASMES"$Rand(1000)$";"$Winners.TeamIndex$";"$FinalScore$";"$ThreeStars$";"$RedPlayers$";"$BluePlayers$";"$RedScores$";"$BlueScores$";"$RedEff$";"$BlueEff$";"$matchinfo$";"$Objectives);
-		DRP.SendMSG("ASMES"$Rand(1000)$";"$Winners.TeamIndex$";"$FinalScore$";"$ThreeStars$";"$RedPlayers$";"$BluePlayers$";"$RedScores$";"$BlueScores$";"$RedEff$";"$BlueEff$";"$matchinfo$";"$ASGRI.GetRoundWinnerString());
-	else
-		DRP.SendMSG("ASMES"$Rand(1000)$";"$Winners.TeamIndex$";"$FinalScore$";"$ThreeStars$";"$RedPlayers$";"$BluePlayers$";"$RedScores$";"$BlueScores$";"$RedEff$";"$BlueEff$";"$matchinfo$";"$ASGRI.GetRoundWinnerString());
-	bPosted = True;
+//		DRP.SendMSG("ASMES"$Rand(1000)$";"$Winners.TeamIndex$";"$FinalScore$";"$ThreeStars$";"$RedPlayers$";"$BluePlayers$";"$RedScores$";"$BlueScores$";"$RedEff$";"$BlueEff$";"$matchinfo$";"$ASGRI.GetRoundWinnerString());
+//	else
+	DRP.SendMSG("ASMES"$Rand(1000)$";"$Winners.TeamIndex$";"$FinalScore$";"$ThreeStars$";"$RedPlayers$";"$BluePlayers$";"$RedScores$";"$BlueScores$";"$RedEff$";"$BlueEff$";"$matchinfo$";"$Winners.TeamName@"wins the match!");
+	return;
   }
   
   
   if (xBombingRun(Level.Game) != None){
+  	Log("[DiscordLink] Sending BR Summary");
     DRP.SendMSG("BRMES"$Rand(1000)$";"$Winners.TeamIndex$";"$FinalScore$";"$ThreeStars$";"$RedPlayers$";"$BluePlayers$";"$RedScores$";"$BlueScores$";"$RedCaptures$";"$BlueCaptures$";"$matchinfo);
-	bPosted = True;	
+	return;	
   }  
   
-  if (xTeamGame(Level.Game) != None && !bPosted){
+  if (Level.Game.bTeamGame){
+    Log("[DiscordLink] Sending generic team game Summary");
     DRP.SendMSG("TDMES"$Rand(1000)$";"$Winners.TeamIndex$";"$FinalScore$";"$RedPlayers$";"$BluePlayers$";"$RedScores$";"$BlueScores$";"$RedEff$";"$BlueEff$";"$matchinfo);
+	return;	
   }
   
   if(xDeathmatch(Level.Game) != None){
+    Log("[DiscordLink] Sending generic team game Summary");
 	DRP.SendMSG("DMMES"$Rand(1000)$";"$PRIs[0].PlayerName$";"$RedPlayers$";"$RedScores$";"$RedEff$";"$matchinfo);
+	return;	
   }
 
   
@@ -1421,36 +1460,58 @@ event Destroyed()
 
 DefaultProperties
 {
+// %w - winning team name
+// %l - losing team name
+// %c - point name ("capture" actually)
+// %p - player who made the last capture of the game, last overall, not last for the winning teaam!
+// %o - total score (f.e. if game score was 3:1 thi will be replaced by 4)
+// type - type of heading, defines situation when this heading should be used
+// The available values for type are:
+// 0 - shutout victory (a big score shut-out victory f.e. 7-0 or 5-0)
+// 1 - solid (3 point difference - 6-2, 4-1 and so on )
+// 2 - close score (1 point difference)
+// 3 - comeback (was losing but took the lead and won) not implemented yet;
+// 4 - overtime win
+// 5 - comeback OT victory (managed to tie the match and win the overtime) not implemented yet;
+// 6 - any other victory
+// 7 - tie
+// 8 - 0:0 tie
+// 9 - big score match (9:5 and so on, losing team must score more at least 5 goals for this to be used)
   HeadingsArray(0)=(Heading="%w shuts out %l",type=0)
   HeadingsArray(1)=(Heading="%l suffers humiliating defeat from %w",type=0)
-  HeadingsArray(2)=(Heading="%l was no match for %w",type=0)
-  HeadingsArray(3)=(Heading="%l is held scoreless against %w",type=0)
-  HeadingsArray(4)=(Heading="%w wins match against %l with a solid lead",type=1)
+  HeadingsArray(2)=(Heading="%l was just no match for %w",type=0)
+  HeadingsArray(3)=(Heading="%l is held scoreless by %w",type=0)
+  HeadingsArray(4)=(Heading="%w wins against %l with a hefty lead",type=1)
   HeadingsArray(5)=(Heading="%w defeats %l",type=1)
   HeadingsArray(6)=(Heading="%w defeats %l in a close game",type=2)
-  HeadingsArray(7)=(Heading="%w wins over %l by one %c",type=2)
-  HeadingsArray(8)=(Heading="%w wins over %l by one %c in the overtime",type=4)
-  HeadingsArray(9)=(Heading="Cap in OT brings %w the victory over %l",type=4)
+  HeadingsArray(7)=(Heading="%w wins it by a single %c",type=2)
+  HeadingsArray(8)=(Heading="%w wins in OT decider",type=4)
+  HeadingsArray(9)=(Heading="%w defeats the %l in OT",type=4)
   HeadingsArray(10)=(Heading="%w defeats %l",type=6)
-  HeadingsArray(11)=(Heading="%w is victorious over %l",type=6)
+  HeadingsArray(11)=(Heading="%w stops %l",type=6)
+  HeadingsArray(13)=(Heading="%l loses to %w",type=6)
   HeadingsArray(12)=(Heading="%w wins match against %l",type=6)
-  HeadingsArray(13)=(Heading="%l loses match against %w",type=6)
-  HeadingsArray(14)=(Heading="One %p brings %w the victory over %l",type=2)
-  HeadingsArray(15)=(Heading="%c's %p brings %w the victory over %l",type=2)
-  HeadingsArray(16)=(Heading="%w brings %p the victory over %l",type=2)
+  HeadingsArray(14)=(Heading="%w edges %l out by one %c",type=2)
+  HeadingsArray(15)=(Heading="%w gets a W over %l",type=2)
+  HeadingsArray(16)=(Heading="%w comes out on top by a single %c",type=2)
   HeadingsArray(17)=(Heading="Both teams unable to score",type=8)
-  HeadingsArray(18)=(Heading="%w and %l couldn't find a winner",type=7)
-  HeadingsArray(19)=(Heading="No %cs, no assists as %w tied the match against %l",type=8)
-  HeadingsArray(20)=(Heading="%c's %p brings %w a draw in match against %l",type=7)
+  HeadingsArray(18)=(Heading="%w and %l find no winner",type=7)
+  HeadingsArray(19)=(Heading="%w and %l stay scoreless",type=8)
+  HeadingsArray(20)=(Heading="%p brings %w a victory in OT",type=4)
   HeadingsArray(21)=(Heading="It's a draw!",type=7)
-  HeadingsArray(22)=(Heading="%c's %p brings %w the victory over %l in OT",type=4)
-  HeadingsArray(23)=(Heading="Both teams make %o %ps as %w win over %l",type=9)
-  HeadingsArray(24)=(Heading="An all-out-attack game brings %w the victory over %l",type=9)
-  HeadingsArray(25)=(Heading="%w takes the W in a no-defence game",type=9)
+  HeadingsArray(22)=(Heading="%p's %c brings %w a victory over %l in OT",type=4)
+  HeadingsArray(23)=(Heading="Scoring galore: %o %ps as %w comes out on top",type=9)
+  HeadingsArray(24)=(Heading="What's 'defence'? %w wins, teams cap %o flags combined",type=9)
+  HeadingsArray(25)=(Heading="%w takes the W in a game with no defence",type=9)
   HeadingsArray(26)=(Heading="%w comes out on top in an all-out game",type=9)
-  HeadingsArray(27)=(Heading="%w walks over %l",type=10)
-  HeadingsArray(28)=(Heading="%l forgot to show up in a match against %w",type=10)
-  HeadingsArray(29)=(Heading="%w secure the win with a cap in OT",type=4)
+  HeadingsArray(27)=(Heading="%w walks over %l",type=0)
+  HeadingsArray(28)=(Heading="%w pounds %l",type=0)
+  HeadingsArray(29)=(Heading="%w secures the W with a cap in overtime",type=4)
+  HeadingsArray(30)=(Heading="%p leads %w to victory in OT",type=4)
+  HeadingsArray(31)=(Heading="%w overpowers %l",type=2)
+  HeadingsArray(32)=(Heading="%l was unable to stop %w",type=0)
+  HeadingsArray(33)=(Heading="%w tops %l",type=6)
+  HeadingsArray(34)=(Heading="%w edges %l in OT",type=4)
   DescString(0)="Enable OLStats passthrough"
   DescString(1)="Report match start event"
   DescString(2)="Report scoring events"

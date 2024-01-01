@@ -31,16 +31,16 @@ function PreBeginPlay()
     FirstTimeConfig();
     SaveConfig();
 
-    log("[TKLMutator]: initializing TKLMutator, attempting to spawn TKLMutatorTcpLinkClient");
+    log("[DiscordLink]: initializing TKLMutator, attempting to spawn TKLMutatorTcpLinkClient");
 	TKLMTLC = Spawn(class'TKLMutatorTcpLinkClient');
     if (TKLMTLC == None){
 		bLinkEnabled = False;
-		log("[TKLMutator]: error spawning TKLMutatorTcpLinkClient");
+		log("[DiscordLink]: error spawning TKLMutatorTcpLinkClient");
         return;
     }
     TKLMTLC.Parent = self;
     bLinkEnabled = True;
-    log("[TKLMutator]: TKLMutatorTcpLinkClient initialized");
+    log("[DiscordLink]: TKLMutatorTcpLinkClient initialized");
 	
     if (Level.Game.GameStatsClass == "LDiscordLink.LGameStats")
     	return;
@@ -75,8 +75,8 @@ function SendMSG(string data)
   
   RecordQueue.Length = RecordQueue.Length+1;
   RecordQueue[RecordQueue.Length-1] = LogRecord;
-  Log("Added a text to processing queue: "$RecordQueue[RecordQueue.Length-1].Payload);
-  Log("Processing queue length: "$RecordQueue.Length);
+  Log("[DiscordLink] Added a text to processing queue: "$RecordQueue[RecordQueue.Length-1].Payload);
+  Log("[DiscordLink] Processing queue length: "$RecordQueue.Length);
   ProcessQueue();
 }
 
@@ -102,7 +102,7 @@ final function CancelOpenLink()
 {
     if (TKLMTLC != None && !TKLMTLC.IsConnected())
     {
-        log("[TKLMutator]: cancelling link connection attempt");
+        log("[DiscordLink]: cancelling link connection attempt");
         TKLMTLC.Close();
     }
 }
@@ -149,10 +149,10 @@ final function ProcessQueue()
         {
             // NetRecord = Compress(Record);
             TKLMTLC.SendBufferedData(FileRecord);
-			log("ProcessQueue(), sending data :"$FileRecord);
+			log("[DiscordLink] ProcessQueue(), sending data :"$FileRecord);
         }
 		else {
-			log("ProcessQueue(): Not sending the message because link wasn't set up");		
+			log("[DiscordLink] ProcessQueue(): Not sending the message because link wasn't set up");		
 		}
         NumProcessed++;
     }
