@@ -1,7 +1,7 @@
 # DiscordLink
 
 
-This mutator provides real time reporting of match events from UT2004 server to a specific channel in a Discord server via webhooks. This work is based on tuokri's rs2-tklogging code. Since UT2004 doesn't know SSL and Discord is all SSL, we use an interim Python server that listens to the events sent from UT and processes them a bit and wraps them in a webhook call.
+This mutator provides real time reporting of match events from UT2004 server to a specific channel in a Discord server via webhooks. This work is based on [tuokri](https://github.com/tuokri)'s [rs2-tklogging](https://github.com/tuokri/rs2-tklogging) and [tklserver](https://github.com/tuokri/tklserver) code. Since UT2004 doesn't know SSL and Discord is all SSL, DiscordLink requires an interim Python server that listens to the events sent from UT, processes them a bit and wraps them in a webhook call.
 
 
 UT2004 code is based on UT's own built-in stats and I repurposed quite a bit of code from my old GameLogger mutator that I wrote ~17-19 years ago or so. It does some preliminary sorting and process that can be easily done in UnrealScript and which requires game logic or configuration through webadmin. The stripped down data (I want to keep it as short as possible as the existing implementation of BufferedTCPLink is limited to a buffer of 2048 bytes and that's a hard limit imposed by UE2) – is sent to the Python server which creates an embed and does some additional string processing of the data.
