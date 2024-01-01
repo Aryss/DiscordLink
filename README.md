@@ -8,6 +8,7 @@ UT2004 code is based on UT's own built-in stats and I repurposed quite a bit of 
 Currently while I'm still working on this, I'm only providing a basic guide on how to set this up. A proper guide on how to set this up will be available later. Requests and questions can be asked in this Discord server: https://discord.gg/5YTkVvdkhG
 
 Setup steps:
+
 0. First and foremost to run this you need to be able to run a python3 script alongside your server or on a separate box. This is where you run the server script from the PyServer folder. 
 1. Create a webhook in a channel you want the reports to be sent to and update the tklserver.ini with the webhook link and the server info. 
 2. Run the python server, the console will say it's started and listening
