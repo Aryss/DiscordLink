@@ -880,8 +880,7 @@ class TKLRequestHandler(StreamRequestHandler):
                     elif type == 'ASEVT':
                         self.as_obj(ident, data)
                     else:
-                        logger.info("Unknown event type: {type}", type=type)
-                        break						
+                        logger.info("Unknown event type: {type}", type=type)					
                 else:
                     logger.error("server unique ID {i} not in Discord config", i=ident)
 
