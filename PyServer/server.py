@@ -110,7 +110,7 @@ class TKLRequestHandler(StreamRequestHandler):
             logger.info("Else sending webhook message for {i}", i=ident)
             webhook.send(content=msg)
 
-    def asmatch_start(self, ident: str, msg: str):
+    def as_match_start(self, ident: str, msg: str):
         embed: Optional[discord.Embed] = None
 		# level.timeseconds, round time, reinforcement delay, pais of rounds, map name
         match_data =  msg.split(';')
@@ -118,13 +118,14 @@ class TKLRequestHandler(StreamRequestHandler):
         if self.lastSentSummaryMsg == match_data[0]:
             return
 		
-        logger.info("Match start data:"+ msg)
+        logger.info("Match start data: "+ msg)
         self.lastSentSummaryMsg = match_data[0]
+				
         try:
             embed = discord.Embed(title="Match has started", description="Assaault on " + match_data[4], color=0x00c632, timestamp=datetime.now())
             embed.add_field(name="Round Time Limit", value=match_data[1] + "m", inline=True)
             embed.add_field(name="Reinforcements Time", value=match_data[2], inline=True)
-            embed.add_field(name="Pair of rounds", value=match_data[3], inline=True)
+            embed.add_field(name="Pairs of Rounds", value=match_data[3], inline=True)
 			
 
         except Exception as e:
@@ -155,7 +156,7 @@ class TKLRequestHandler(StreamRequestHandler):
         if self.lastSentScoreMsg == match_data[0]:
             return
 			
-        logger.info("CTF cap:"+ msg)			
+        logger.info("CTF cap: "+ msg)			
         tcolor = 0xea5353
         self.lastSentScoreMsg = match_data[0]
         try:
@@ -163,9 +164,10 @@ class TKLRequestHandler(StreamRequestHandler):
                 tcolor = 0x5164ec
             else:
                 tcolor = 0xea5353
-            embed = discord.Embed(title=match_data[4] + " captures the flag!", description=match_data[3] + " scores for the "+ match_data[4] +"\n Time: "+match_data[0], color=tcolor, timestamp=datetime.now())
-            embed.add_field(name="Red Team", value=match_data[1], inline=True)
-            embed.add_field(name="Blue Team", value=match_data[2], inline=True)			
+            embed = discord.Embed(title=match_data[4] + " captures the flag!", description=match_data[3] + " scores for the "+ match_data[4] +"\n Time: "+match_data[0], color=tcolor)
+            embed.add_field(name="Score", value=":red_square:  **" + match_data[1] + ":" + match_data[2] + "**  :blue_square:", inline=True)
+            '''embed.add_field(name="Red Team", value=match_data[1], inline=True)
+            embed.add_field(name="Blue Team", value=match_data[2], inline=True)'''
 			
 
         except Exception as e:
@@ -188,7 +190,218 @@ class TKLRequestHandler(StreamRequestHandler):
             logger.info("Else sending webhook message for {i}", i=ident)
             webhook.send(content=msg)
 
-    def br_cap(self, ident: str, msg: str):
+    def br_tcd(self, ident: str, msg: str):
+        embed: Optional[discord.Embed] = None
+		# level.timeseconds, goalscore, time limit, mode, map name
+        match_data =  msg.split(';')
+
+		
+        if self.lastSentScoreMsg == match_data[0]:
+            return
+			
+        logger.info("BR cap: "+ msg)		
+        tcolor = 0xea5353
+        self.lastSentScoreMsg = match_data[0]
+        try:
+            if match_data[5] == "1":
+                tcolor = 0x5164ec
+            else:
+                tcolor = 0xea5353
+            embed = discord.Embed(description="**" + match_data[0] + ":** " + match_data[3] + " makes a touchdown for the "+ match_data[4], color=tcolor)
+            embed.add_field(name="Score", value=":red_square:  **" + match_data[1] + ":" + match_data[2] + "**  :blue_square:", inline=True)
+			
+
+        except Exception as e:
+            logger.error("error creating embed message: {e}",
+                         e=e, exc_info=True)
+
+        webhook_id = self.server.discord_config[ident][0]
+        webhook_token = self.server.discord_config[ident][1]
+        webhook = SyncWebhook.partial(
+            id=webhook_id, token=webhook_token
+			)
+
+        if embed is not None:
+            logger.info("sending webhook embed for {i}", i=ident)
+            try:
+                webhook.send(embed=embed)
+            except Exception as e:
+                logger.error(e, exc_info=True)
+        else:
+            logger.info("Else sending webhook message for {i}", i=ident)
+            webhook.send(content=msg)
+
+    def br_tss(self, ident: str, msg: str):
+        embed: Optional[discord.Embed] = None
+		# level.timeseconds, goalscore, time limit, mode, map name
+        match_data =  msg.split(';')
+
+		
+        if self.lastSentScoreMsg == match_data[0]:
+            return
+			
+        logger.info("BR cap: "+ msg)		
+        tcolor = 0xea5353
+        self.lastSentScoreMsg = match_data[0]
+        try:
+            if match_data[5] == "1":
+                tcolor = 0x5164ec
+            else:
+                tcolor = 0xea5353
+            embed = discord.Embed(description="**" + match_data[0] + ":** " + match_data[3] + " scores for the "+ match_data[4], color=tcolor)
+            embed.add_field(name="Score", value=":red_square:  **" + match_data[1] + ":" + match_data[2] + "**  :blue_square:", inline=True)
+
+            '''
+            embed = discord.Embed(title=match_data[4] + " scores!", description=match_data[3] + " scores for the "+ match_data[4] +"\n Time: "+match_data[0], color=tcolor)
+            embed.add_field(name="Red Team", value=match_data[1], inline=True)
+            embed.add_field(name="Blue Team", value=match_data[2], inline=True)	'''
+			
+
+        except Exception as e:
+            logger.error("error creating embed message: {e}",
+                         e=e, exc_info=True)
+
+        webhook_id = self.server.discord_config[ident][0]
+        webhook_token = self.server.discord_config[ident][1]
+        webhook = SyncWebhook.partial(
+            id=webhook_id, token=webhook_token
+			)
+
+        if embed is not None:
+            logger.info("sending webhook embed for {i}", i=ident)
+            try:
+                webhook.send(embed=embed)
+            except Exception as e:
+                logger.error(e, exc_info=True)
+        else:
+            logger.info("Else sending webhook message for {i}", i=ident)
+            webhook.send(content=msg)
+
+    def overtime(self, ident: str, msg: str):
+        embed: Optional[discord.Embed] = None
+		# level.timeseconds, goalscore, time limit, mode, map name
+        match_data =  msg.split(';')
+
+		
+        if self.lastSentScoreMsg == match_data[0]:
+            return
+			
+        logger.info("OT: "+ msg)		
+        tcolor = 0xea5353
+        self.lastSentScoreMsg = match_data[0]
+        try:
+            embed = discord.Embed(description="OVERTIME!", color=tcolor)
+            embed.add_field(name="Score", value=":red_square:  **" + match_data[1] + ":" + match_data[2] + "**  :blue_square:", inline=True)
+
+            '''
+            embed = discord.Embed(title=match_data[4] + " scores!", description=match_data[3] + " scores for the "+ match_data[4] +"\n Time: "+match_data[0], color=tcolor)
+            embed.add_field(name="Red Team", value=match_data[1], inline=True)
+            embed.add_field(name="Blue Team", value=match_data[2], inline=True)	'''
+			
+
+        except Exception as e:
+            logger.error("error creating embed message: {e}",
+                         e=e, exc_info=True)
+
+        webhook_id = self.server.discord_config[ident][0]
+        webhook_token = self.server.discord_config[ident][1]
+        webhook = SyncWebhook.partial(
+            id=webhook_id, token=webhook_token
+			)
+
+        if embed is not None:
+            logger.info("sending webhook embed for {i}", i=ident)
+            try:
+                webhook.send(embed=embed)
+            except Exception as e:
+                logger.error(e, exc_info=True)
+        else:
+            logger.info("Else sending webhook message for {i}", i=ident)
+            webhook.send(content=msg)
+
+    def round_win(self, ident: str, msg: str):
+        embed: Optional[discord.Embed] = None
+		# level.timeseconds, goalscore, time limit, mode, map name
+        match_data =  msg.split(';')
+
+		
+        if self.lastSentScoreMsg == match_data[0]:
+            return
+			
+        logger.info("Round victory: "+ msg)		
+        tcolor = 0xea5353
+        self.lastSentScoreMsg = match_data[0]
+        try:
+            if match_data[3] == "1":
+                tcolor = 0x5164ec
+            else:
+                tcolor = 0xea5353
+            embed = discord.Embed(description="**" + match_data[0] + ":** " + match_data[4] + " wins the round!", color=tcolor)
+            embed.add_field(name="Score", value=":red_square:  **" + match_data[1] + ":" + match_data[2] + "**  :blue_square:", inline=True)
+			
+
+        except Exception as e:
+            logger.error("error creating embed message: {e}",
+                         e=e, exc_info=True)
+
+        webhook_id = self.server.discord_config[ident][0]
+        webhook_token = self.server.discord_config[ident][1]
+        webhook = SyncWebhook.partial(
+            id=webhook_id, token=webhook_token
+			)
+
+        if embed is not None:
+            logger.info("sending webhook embed for {i}", i=ident)
+            try:
+                webhook.send(embed=embed)
+            except Exception as e:
+                logger.error(e, exc_info=True)
+        else:
+            logger.info("Else sending webhook message for {i}", i=ident)
+            webhook.send(content=msg)
+
+    def as_round_win(self, ident: str, msg: str):
+        embed: Optional[discord.Embed] = None
+		# level.timeseconds, goalscore, time limit, mode, map name
+        match_data =  msg.split(';')
+
+		
+        if self.lastSentScoreMsg == match_data[0]:
+            return
+			
+        logger.info("AS Round victory: "+ msg)		
+        tcolor = 0xea5353
+        self.lastSentScoreMsg = match_data[0]
+        try:
+            if match_data[3] == "1":
+                tcolor = 0x5164ec
+            else:
+                tcolor = 0xea5353
+            embed = discord.Embed(title="Round set completed: " + match_data[4], color=tcolor)
+            embed.add_field(name="Score", value=":red_square:  **" + match_data[1] + ":" + match_data[2] + "**  :blue_square:", inline=True)
+			
+
+        except Exception as e:
+            logger.error("error creating embed message: {e}",
+                         e=e, exc_info=True)
+
+        webhook_id = self.server.discord_config[ident][0]
+        webhook_token = self.server.discord_config[ident][1]
+        webhook = SyncWebhook.partial(
+            id=webhook_id, token=webhook_token
+			)
+
+        if embed is not None:
+            logger.info("sending webhook embed for {i}", i=ident)
+            try:
+                webhook.send(embed=embed)
+            except Exception as e:
+                logger.error(e, exc_info=True)
+        else:
+            logger.info("Else sending webhook message for {i}", i=ident)
+            webhook.send(content=msg)
+
+    def ons_core_dest(self, ident: str, msg: str):
         embed: Optional[discord.Embed] = None
 		# level.timeseconds, goalscore, time limit, mode, map name
         match_data =  msg.split(';')
@@ -201,13 +414,12 @@ class TKLRequestHandler(StreamRequestHandler):
         tcolor = 0xea5353
         self.lastSentScoreMsg = match_data[0]
         try:
-            if match_data[5] == "1":
+            if match_data[3] == "1":
                 tcolor = 0x5164ec
             else:
                 tcolor = 0xea5353
-            embed = discord.Embed(title=match_data[4] + " scores!", description=match_data[3] + " scores for the "+ match_data[4] +"\n Time: "+match_data[0], color=tcolor, timestamp=datetime.now())
-            embed.add_field(name="Red Team", value=match_data[1], inline=True)
-            embed.add_field(name="Blue Team", value=match_data[2], inline=True)			
+            embed = discord.Embed(description="**" + match_data[0] + ":** " + match_data[4] + " destroys the enemy core!", color=tcolor)
+            embed.add_field(name="Score", value=":red_square:  **" + match_data[1] + ":" + match_data[2] + "**  :blue_square:", inline=True)
 			
 
         except Exception as e:
@@ -304,7 +516,7 @@ class TKLRequestHandler(StreamRequestHandler):
                 tcolor = 0x5164ec
             else:
                 tcolor = 0xea5353		
-            embed = discord.Embed(title=match_data[3], description=match_data[13] + "\nFinal score: **Red " + match_data[2] + " Blue**\n\nScoring attempts: \n**Red:** " + match_data[5] + "\n**Blue:** " + match_data[6] + "\n\nThree stars: "+ match_data[4] + "\n\n**Scorers:**\n" + Caps, color=tcolor, timestamp=datetime.now())
+            embed = discord.Embed(title=match_data[3], description=match_data[13] + "\nFinal score: :red_square:  **" + match_data[2] + "**  :blue_square:\n\nScoring attempts: \n**Red:** " + match_data[5] + "\n**Blue:** " + match_data[6] + "\n\nThree stars: "+ match_data[4] + "\n\n**Scorers:**\n" + Caps, color=tcolor, timestamp=datetime.now())
             embed.add_field(name="Red Team", value=RedScorers, inline=True)
             embed.add_field(name="Score", value=RedScores, inline=True)
             embed.add_field(name="Captures", value=RedCaps, inline=True)
@@ -361,7 +573,7 @@ class TKLRequestHandler(StreamRequestHandler):
                 tcolor = 0x5164ec
             else:
                 tcolor = 0xea5353		
-            embed = discord.Embed(title=match_data[11], description=match_data[10] + "\nFinal score: **Red " + match_data[2] + " Blue**\n\nThree stars: "+ match_data[3], color=tcolor, timestamp=datetime.now())
+            embed = discord.Embed(title=match_data[11], description=match_data[10] + "\nFinal score: :red_square:  **" + match_data[2] + "**  :blue_square:\n\nThree stars: "+ match_data[3], color=tcolor, timestamp=datetime.now())
             embed.add_field(name="Red Team", value=RedScorers, inline=True)
             embed.add_field(name="Score", value=RedScores, inline=True)
             embed.add_field(name="Efficiency", value=RedCaps, inline=True)
@@ -421,7 +633,7 @@ class TKLRequestHandler(StreamRequestHandler):
             else:
                 tcolor = 0xea5353		
                 heading = "Red team wins the match"	
-            embed = discord.Embed(title=heading, description=match_data[10] + "\nFinal score: **Red " + match_data[2] + " Blue**\n\n" + "Three stars: "+ match_data[3], color=tcolor, timestamp=datetime.now())
+            embed = discord.Embed(title=heading, description=match_data[10] + "\nFinal score: :red_square:  **" + match_data[2] + "**  :blue_square:\n\n" + "Three stars: "+ match_data[3], color=tcolor, timestamp=datetime.now())
             embed.add_field(name="Red Team", value=RedScorers, inline=True)
             embed.add_field(name="Score", value=RedScores, inline=True)
             embed.add_field(name="Captures", value=RedCaps, inline=True)
@@ -638,11 +850,21 @@ class TKLRequestHandler(StreamRequestHandler):
                     if type == 'MSTRT':
                         self.match_start(ident, data)
                     elif type == 'ASMST':
-                        self.asmatch_start(ident, data)
+                        self.as_match_start(ident, data)
                     elif type == 'CTFFC':
                         self.ctf_cap(ident, data)
-                    elif type == 'DBCFC':
-                        self.br_cap(ident, data)						
+                    elif type == 'BRTCD':
+                        self.br_tcd(ident, data)
+                    elif type == 'BRTSS':
+                        self.br_tss(ident, data)
+                    elif type == 'ONSCD':
+                        self.ons_core_dest(ident, data)
+                    elif type == 'TGRND':
+                        self.round_win(ident, data)
+                    elif type == 'ASRDW':
+                        self.as_round_win(ident, data)
+                    elif type == 'GENOT':
+                        self.overtime(ident, data)
                     elif type == 'CTFES':
                         self.ctf_match_end(ident, data)
                     elif type == 'ASMES':
