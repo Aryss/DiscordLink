@@ -1211,7 +1211,7 @@ function Timer(){
   
   // overtime check
   if (Level.Game.bOverTime && !bWasOvertime){
-   DRP.SendMSG("GENOT"$Timestamp()$";"$GRI.Teams[0].Score$";"$GRI.Teams[1].Score); // we still need to send timestamp as it's used by the Py server deduplication feature
+   DRP.SendMSG("GENOT"$Timestamp()$";"$int(GRI.Teams[0].Score)$";"$int(GRI.Teams[1].Score)); // we still need to send timestamp as it's used by the Py server deduplication feature
    bOvertime = true;
    bWasOvertime = true;
   }
