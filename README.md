@@ -16,7 +16,8 @@ Setup steps:
 2. Run the python server, the console will say it's started and listening
 3. Add the following entries to the end of your server config (proper WebAdmin support coming, but doesn't quite work for now):
 
-```[LDiscordLink.TKLMutatorTcpLinkClient]
+```
+[LDiscordLink.TKLMutatorTcpLinkClient]
 TKLServerHost=[your Py server IP]
 TKLServerPort=[your Py server port]
 MaxRetries=5
