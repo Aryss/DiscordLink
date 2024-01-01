@@ -21,7 +21,6 @@ Setup steps:
 TKLServerHost=[your Py server IP]
 TKLServerPort=[your Py server port]
 MaxRetries=5
-UniqueRS2ServerId=0000
 
 [LDiscordLink.LGameStats]
 bOLStatsEnabled=False
