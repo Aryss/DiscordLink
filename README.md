@@ -23,7 +23,6 @@ bOLStatsEnabled=False
 bFlavorHeading=True
 bReportMatchStart=True
 bReportScoreEvents=True
-bReportSpreesStreaks=True
 bPostCapSummary=True
 ```
 Key items here:
