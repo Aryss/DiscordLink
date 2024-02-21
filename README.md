@@ -33,7 +33,8 @@ bOLStatsEnabled=False
 bFlavorHeading=True
 bReportMatchStart=True
 bReportScoreEvents=True
-bPostCapSummary=True```
+bPostCapSummary=True
+```
 
 4. Start a server with LDiscordLink.MutLDiscordReport/Discord Link mutator. You should see a connection appear in Python server log.
 
