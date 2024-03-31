@@ -277,7 +277,7 @@ class TKLRequestHandler(StreamRequestHandler):
             logger.info("Else sending webhook message for {i}", i=ident)
             webhook.send(content=msg)
 
-    def overtime(self, ident: str, msg: str):
+    def tm_overtime(self, ident: str, msg: str):
         embed: Optional[discord.Embed] = None
 		# level.timeseconds, goalscore, time limit, mode, map name
         match_data =  msg.split(';')
@@ -292,6 +292,48 @@ class TKLRequestHandler(StreamRequestHandler):
         try:
             embed = discord.Embed(description="OVERTIME!", color=tcolor)
             embed.add_field(name="Score", value=":red_square:  **" + match_data[1] + ":" + match_data[2] + "**  :blue_square:", inline=True)
+
+            '''
+            embed = discord.Embed(title=match_data[4] + " scores!", description=match_data[3] + " scores for the "+ match_data[4] +"\n Time: "+match_data[0], color=tcolor)
+            embed.add_field(name="Red Team", value=match_data[1], inline=True)
+            embed.add_field(name="Blue Team", value=match_data[2], inline=True)	'''
+			
+
+        except Exception as e:
+            logger.error("error creating embed message: {e}",
+                         e=e, exc_info=True)
+
+        webhook_id = self.server.discord_config[ident][0]
+        webhook_token = self.server.discord_config[ident][1]
+        webhook = SyncWebhook.partial(
+            id=webhook_id, token=webhook_token
+			)
+
+        if embed is not None:
+            logger.info("sending webhook embed for {i}", i=ident)
+            try:
+                webhook.send(embed=embed)
+            except Exception as e:
+                logger.error(e, exc_info=True)
+        else:
+            logger.info("Else sending webhook message for {i}", i=ident)
+            webhook.send(content=msg)
+            
+    
+    def overtime(self, ident: str, msg: str):
+        embed: Optional[discord.Embed] = None
+		# level.timeseconds, goalscore, time limit, mode, map name
+        match_data =  msg.split(';')
+
+		
+        if self.lastSentScoreMsg == match_data[0]:
+            return
+			
+        logger.info("OT: "+ msg)		
+        tcolor = 0xea5353
+        self.lastSentScoreMsg = match_data[0]
+        try:
+            embed = discord.Embed(description="OVERTIME!", color=tcolor)
 
             '''
             embed = discord.Embed(title=match_data[4] + " scores!", description=match_data[3] + " scores for the "+ match_data[4] +"\n Time: "+match_data[0], color=tcolor)
@@ -482,6 +524,45 @@ class TKLRequestHandler(StreamRequestHandler):
             logger.info("Else sending webhook message for {i}", i=ident)
             webhook.send(content=msg)
 
+    def as_round_end(self, ident: str, msg: str):
+        embed: Optional[discord.Embed] = None
+		# level.timeseconds, goalscore, time limit, mode, map name
+		
+        if self.lastSentScoreMsg == msg:
+            return
+
+        match_data =  msg.split(';')			
+        logger.info("AS round ended:"+ msg)			
+        tcolor = 0xea5353
+        self.lastSentScoreMsg = msg
+        try:
+            if match_data[1] == "1":
+                tcolor = 0x5164ec
+            else:
+                tcolor = 0xea5353
+            embed = discord.Embed(title=match_data[2], description="", color=tcolor)
+			
+
+        except Exception as e:
+            logger.error("error creating embed message: {e}",
+                         e=e, exc_info=True)
+
+        webhook_id = self.server.discord_config[ident][0]
+        webhook_token = self.server.discord_config[ident][1]
+        webhook = SyncWebhook.partial(
+            id=webhook_id, token=webhook_token
+			)
+
+        if embed is not None:
+            logger.info("sending webhook embed for {i}", i=ident)
+            try:
+                webhook.send(embed=embed)
+            except Exception as e:
+                logger.error(e, exc_info=True)
+        else:
+            logger.info("Else sending webhook message for {i}", i=ident)
+            webhook.send(content=msg)
+
     def ctf_match_end(self, ident: str, msg: str):
         embed: Optional[discord.Embed] = None
 		# level.timeseconds, goalscore, time limit, mode, map name
@@ -565,7 +646,15 @@ class TKLRequestHandler(StreamRequestHandler):
         BlueCaps = "\n".join(str(x) for x in BlueCapsList)
         RedCapsList = match_data[8].split('%')
         RedCaps = "\n".join(str(x) for x in RedCapsList)
-		
+
+        if len(match_data) == 15:
+            ObjectivesList = match_data[12].split('%')
+            Objectives = "\n".join(str(x).rstrip('.') for x in ObjectivesList)
+            RedTimesList = match_data[13].split('%')
+            RedTimes = "\n".join(str(x) for x in RedTimesList)
+            BlueTimesList = match_data[14].split('%')
+            BlueTimes = "\n".join(str(x) for x in BlueTimesList)
+     
         tcolor = 0xea5353
         self.lastSentSummaryMsg = match_data[0]
         try:
@@ -576,10 +665,14 @@ class TKLRequestHandler(StreamRequestHandler):
             embed = discord.Embed(title=match_data[11], description=match_data[10] + "\nFinal score: :red_square:  **" + match_data[2] + "**  :blue_square:\n\nThree stars: "+ match_data[3], color=tcolor, timestamp=datetime.now())
             embed.add_field(name="Red Team", value=RedScorers, inline=True)
             embed.add_field(name="Score", value=RedScores, inline=True)
-            embed.add_field(name="Efficiency", value=RedCaps, inline=True)
+            embed.add_field(name="Objectives", value=RedCaps, inline=True)
             embed.add_field(name="Blue Team", value=BlueScorers, inline=True)			
             embed.add_field(name="Score", value=BlueScores, inline=True)			
-            embed.add_field(name="Efficiency", value=BlueCaps, inline=True)		
+            embed.add_field(name="Objectives", value=BlueCaps, inline=True)
+            if len(match_data) == 15:
+                embed.add_field(name="Objective", value=Objectives, inline=True)			
+                embed.add_field(name="Red Time", value=RedTimes, inline=True)			
+                embed.add_field(name="Blue Time", value=BlueTimes, inline=True)
 
         except Exception as e:
             logger.error("error creating embed message: {e}",
@@ -865,6 +958,8 @@ class TKLRequestHandler(StreamRequestHandler):
                         self.as_round_win(ident, data)
                     elif type == 'GENOT':
                         self.overtime(ident, data)
+                    elif type == 'TBMOT':
+                        self.tm_overtime(ident, data)
                     elif type == 'CTFES':
                         self.ctf_match_end(ident, data)
                     elif type == 'ASMES':
@@ -879,6 +974,8 @@ class TKLRequestHandler(StreamRequestHandler):
                         self.embed_test(ident, data)						
                     elif type == 'ASEVT':
                         self.as_obj(ident, data)
+                    elif type == 'ASRDE':
+                        self.as_round_end(ident, data)
                     else:
                         logger.info("Unknown event type: {type}", type=type)					
                 else:

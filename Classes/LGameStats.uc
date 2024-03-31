@@ -1,37 +1,41 @@
 // ============================================================================
 //  Discord Link Main Report Module
-//  Revision: v1.0 
+//  Revision: v1.0
 // ----------------------------------------------------------------------------
 //  Game Stats Class that hooks events and digests them for sending to Discord webhook.
 //  Loosely based on old GameLogger code
 //-----------------------------------------------------------------------------
-//  by Michael "_Lynx" Sokolkov Â© 2004-2023
+//  by Michael "_Lynx" Sokolkov © 2004-2023
 // ============================================================================
 class LGameStats extends GameStats config;
 
-var globalconfig bool bOLStatsEnabled;         // If true, OLStats logger is spawned and events are passed through
-var globalconfig bool bFlavorHeading;
-var globalconfig bool bReportMatchStart;
-var globalconfig bool bReportScoreEvents;	
-var globalconfig bool bReportSpreesStreaks;
-var globalconfig bool bPostCapSummary;
-var globalconfig bool bPostObjSummary;
-//var globalconfig bool bEnableDebugLog;         // this will create a separate Log file in Userlogs
-var globalconfig int  Priv;					   // The privileges required to modify settings via WebAdmin
+var globalconfig bool bOLStatsEnabled;          // If true, OLStats logger is spawned and events are passed through
+var globalconfig bool bFlavorHeading;           // Use flavour headings in match end summary
+var globalconfig bool bReportMatchStart;        // Post "Match started" message?
+var globalconfig bool bReportScoreEvents;       // Report goals/captures?
+var globalconfig bool bReportSpreesStreaks;     // Report big sprees and kill streaks?
+var globalconfig bool bPostCapSummary;          // CTF/BR Only: post the list of captures/goals in match end summary?
+var globalconfig bool bPostObjSummary;          // AS Only: post the list of objective times in match end summary?
+var globalconfig bool bPostSummaryOnMapChange;  // Post match summary if match ends prematurely by map switch?
+//var globalconfig bool bEnableDebugLog;        // this will create a separate Log file in Userlogs
+var globalconfig int  Priv;					    // The privileges required to modify settings via WebAdmin
+var globalconfig int  MCSMinTime;               // Minimum required match duration to post summary on map change
+var globalconfig int  MCSMinPlayers;            // Minimum required number of players in the game to post summary on map change
 
 
 var bool bWasOvertime;
 var bool bUTCompIsPresent;
 var bool bUTCompWarmUpStarted;
 var bool bMatchStarted;
+var bool bFirstObjCompleted;
 var float MatchStartTime;
 
 
 var int RedScore;
 var int BlueScore;
 
-var GameStats OLSLogger;                         
-var MutLDiscordReport DRP;		
+var GameStats OLSLogger;
+var MutLDiscordReport DRP;
 var teamInfo Winners;
 var ASGameReplicationInfo ASGRI;
 
@@ -55,9 +59,8 @@ var bool bOvertime;             // If the game went in overtime?
 // ============================================================================
 struct ASObjective{
   var string ObjDescription;
-  var bool   bOptional;
-  var int    RedTime;
-  var int    BlueTime;
+  var string    RedTime;
+  var string    BlueTime;
 };
 
 var array<ASObjective> ASObjectives;
@@ -181,7 +184,7 @@ function String FormatTime( int Seconds, optional bool DoNotFix)
 // that a 20 min game lasted 22 mins.
 	if (!DoNotFix){
   	  fixedSeconds = int(Seconds / Level.TimeDilation);
-	  Seconds = fixedSeconds;  
+	  Seconds = fixedSeconds;
 	}
 //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
@@ -241,7 +244,7 @@ function string GetPercentage(float part, float whole){
   local float hundreth;
 
   hundreth = whole/100;
-  result = string(int(int(part)/hundreth));
+  result = string(Max((int(part)/hundreth),0));
   return result$"%";
 }
 
@@ -317,12 +320,53 @@ function string TodayHourServerMap(){
   local string Map;
 
   Today  = Level.Day@MonthStr(Level.Month)@Level.Year$", "$DayOfWeekStr(Level.DayOfWeek);
-  Hour   = Level.Hour$":"$Level.Minute;
   Server = Level.Game.GameReplicationInfo.ServerName;
   Map    = GetMapFileName();
+  if (Level.Minute < 10){
+    Hour   = Level.Hour$":0"$Level.Minute;
+  }
+  else {
+    Hour   = Level.Hour$":"$Level.Minute;
+  }
 
   return Today$"."@Hour$"."@Server$"."@Map$".";
 }
+
+// ============================================================================
+// ReportMapChange
+//
+// Checks if we want to report on map change and if so does additional checks
+// ============================================================================
+
+function bool ReportOnMapChange(){
+  local bool bEnoughTime;
+  local bool bEnoughPlayers;
+
+  bEnoughPlayers = True;
+  bEnoughTime = True;
+
+  if (!bPostSummaryOnMapChange){
+     return false;
+  }
+  else {
+     if (MCSMinPlayers != 0){
+        bEnoughPlayers = (Level.Game.NumPlayers >= MCSMinPlayers);
+        Log("[DiscordLink]: Min players to report map change: "$bEnoughPlayers$" ("$MCSMinPlayers$")");
+     }
+     if (MCSMinTime != 0){
+        bEnoughTime = (int(Level.TimeSeconds - MatchStartTime) >= (MCSMinTime*60));
+        Log("[DiscordLink]: Min time to report map change: "$bEnoughTime$" ("$MCSMinTime$"m)");
+     }
+
+     if (MCSMinPlayers != 0 || MCSMinTime != 0)
+        return bEnoughTime && bEnoughPlayers;
+
+     return true;
+  }
+
+  return false;
+}
+
 
 
 // ============================================================================
@@ -372,11 +416,11 @@ function string GetHighestScore(){
 function string GetMostFlagReturns(){
   local int i, j;
   local array<PlayerReplicationInfo> PRIs;
-  local array<PlayerReplicationInfo> localPRIarray;  
+  local array<PlayerReplicationInfo> localPRIarray;
   local PlayerReplicationInfo PRI,t;
 
   localPRIarray = GRI.PRIArray;
-  
+
   for (i=0;i<localPRIarray.Length;i++)
   {
     PRI = localPRIarray[i];
@@ -468,12 +512,12 @@ function string CreateHeading(String LastScorer){
   local bool bDraw;          // resultive draw (1:1. 4:4, etc)
   local bool bZeroDraw;      // 0:0 draw
   local bool bOneWay;
-//  local bool bComeback;        
+//  local bool bComeback;
   local bool bAllOutAttack;  // both teams played with little or no defence - huge score like 7:8
 
   local string result;       // the created heading will be returned via this var
   local string point;        // point for this gametype. to replace %p in heading
-  
+
   local int TotalScore;   // this string will replace the %o in headings
   local int i;
   local int l;
@@ -482,8 +526,8 @@ function string CreateHeading(String LastScorer){
   local array<string> SuitableHeadings; // The array with headings of the type that suits for this game score
 
   point = "capture";
-  
-  
+
+
   // defining who's who
   if (GRI.Teams[0].Score > GRI.Teams[1].Score){
     winners = GRI.Teams[0];
@@ -493,9 +537,9 @@ function string CreateHeading(String LastScorer){
     winners = GRI.Teams[1];
     losers = GRI.Teams[0];
   }
-  
-  TotalScore = int(winners.Score + losers.Score);  // setting the TotalScore  
-  
+
+  TotalScore = int(winners.Score + losers.Score);  // setting the TotalScore
+
   if (!bFlavorHeading){
     return winners.TeamName@"wins the match!";
   }
@@ -503,9 +547,9 @@ function string CreateHeading(String LastScorer){
   // losers scored 0, winners 5 and more (f.e. 0:5, 0:7, 0:8)
   if (losers.Score == 0 && winners.Score > 4)
    bShutOut = true;
-   
+
   if (!bShutOut && TotalScore > 8 && (winners.Score - losers.Score) > 5 )
-   bOneWay = true;   
+   bOneWay = true;
 
   // losers scored at least half of goalscore.
   if ( TotalScore > 10 && (winners.Score - losers.Score) >= 2  )
@@ -537,7 +581,7 @@ function string CreateHeading(String LastScorer){
       }
     }
   }
-  
+
   if (bOneWay){
     for (i = 0; i < HeadingsArray.Length; i++){
       if (HeadingsArray[i].type == 10){
@@ -638,6 +682,42 @@ function UpdateScores()
 {
   RedScore = int(GRI.Teams[0].Score);
   BlueScore = int(GRI.Teams[1].Score);
+}
+
+//====================================
+// Builds a list of objectives or
+// updates the time. This should be called once per objective, so we should be
+//====================================
+function UpdateASObjList(int TeamIndex, string Objective, int RoundTime){
+   local int i, x;
+
+//   Log("[DiscordLink] Updating objective list:"@TeamIndex@Objective@RoundTime);
+
+   // red team always starts first so we just add the item
+   if (TeamIndex == 0){
+     x = ASObjectives.Length;
+     ASObjectives.Length = x + 1;
+     ASObjectives[x].ObjDescription = Objective;
+     ASObjectives[x].RedTime = FormatTime(RoundTime, True);
+     Log("[DiscordLink] Red team completed objective:"@ASObjectives[x].ObjDescription@"at"@ASObjectives[x].RedTime);
+   }
+   // blue is more complicated since we need to re-use old if there is one and create new if there's a new one
+   else {
+     for (i = 0; i < ASObjectives.Length; i++){
+        // find the first entry that has no time set for blue, update it and stop
+        if (ASObjectives[i].ObjDescription == Objective && ASObjectives[i].BlueTime == ""){
+           ASObjectives[i].ObjDescription = Objective;
+           ASObjectives[i].BlueTime = FormatTime(RoundTime, True);
+           Log("[DiscordLink] Blue team completed objective:"@ASObjectives[x].ObjDescription@"at"@ASObjectives[x].RedTime);
+           return;
+        }
+     }
+     // we didn't find anything, so we didn't hit the return, means it's a new objective Red didn't reach;
+     x = ASObjectives.Length;
+     ASObjectives.Length = x + 1;
+     ASObjectives[x].ObjDescription = Objective;
+     ASObjectives[x].BlueTime = FormatTime(RoundTime, True);
+   }
 }
 
 
@@ -748,15 +828,7 @@ function PreBeginPlay()
     OLSLogger = spawn(class<GameStats>(DynamicLoadObject("OLStats.OLGameStats", class'Class')));
     OLSLogger.GRI = Level.Game.GameReplicationInfo;
   Log("[DiscordLink] World Stats logging support initialized.");
-  } 
-}
-
-function PostBeginPlay()
-{
-
-  
-  Super.PostBeginPlay();
-  
+  }
 }
 
 
@@ -770,33 +842,9 @@ function NewGame()
 {
   local Mutator Mut;
   local CTFFlag testFlag;
-  local GameObjective GO;
-  
-  GRI = Level.Game.GameReplicationInfo;
-  
-/*
-struct ASObjectives{
-  var string ObjDescription;
-  var bool bOptional;
-  var int RedTime;
-  var int Blue Time;
-}
 
-  
-  
-  if (ASGameinfo(Level.Game) != None){
-  // Caching Assault objectives to build track and build summary.
-    ASGRI = ASGameReplicationInfo(GRI);
-  
-    ForEach AllActors(class'GameObjective', GO)
-    {
-      if ( GO.bBotOnlyObjective )	// ignore bot only objectives
-		continue;
-	  ASObjectives[ASObjectives.Length].ObjDescription = GO.ObjectiveDescription;
-	  ASObjectives[ASObjectives.Length].bOptional = GO.bOptionalObjective;
-    }
-  }
-*/
+  GRI = Level.Game.GameReplicationInfo;
+
   foreach AllActors(class'Mutator',Mut)
   {
     if (Left(Mut.FriendlyName, 6) ~= "UTComp"){
@@ -816,7 +864,7 @@ struct ASObjectives{
   myTeams[0].TiedTheScoreTimes = 0;
   myTeams[0].TimesTouchedFlag  = 0;
   myTeams[1].TiedTheScoreTimes = 0;
-  myTeams[1].TimesTouchedFlag  = 0;  
+  myTeams[1].TimesTouchedFlag  = 0;
 
   if (OLSLogger != None){
      OLSLogger.NewGame();
@@ -825,7 +873,7 @@ struct ASObjectives{
     GRI.Teams[1].TeamName = "Blue Team";
     GRI.Teams[0].TeamName = "Red Team";
   }
-  
+
   ForEach AllActors(Class'CTFFlag', testFlag){
     log("[DiscordLink] Found CTFFlag:"@testFlag);
 
@@ -863,10 +911,11 @@ function StartGame()
     OLSLogger.StartGame();
   }
 
-   Log("[DiscordLink]: bUTCompWarmUpStarted:"@bUTCompWarmUpStarted);
+//   Log("[DiscordLink]: bUTCompWarmUpStarted:"@bUTCompWarmUpStarted);
 
   if ( bUTCompIsPresent ){
     bWarmup = bool(ConsoleCommand("get mututcomp bEnableWarmup"));
+//    Log("[DiscordLink]: UTComp Warmup enabled:"@bWarmup);
     if (bWarmup && !bUTCompWarmUpStarted){
 	    bUTCompWarmUpStarted = True;
 		Log("[DiscordLink]: UTComp is detected and warmup is enabled");
@@ -876,6 +925,11 @@ function StartGame()
   	else if (bWarmup && bUTCompWarmUpStarted){
       bMatchStarted = True;
       Log("[DiscordLink]: UTComp is detected and warmup is over, starting the game");
+	  Log("[DiscordLink]: bMatchStarted:"@bUTCompWarmUpStarted);
+    }
+    else{
+      bMatchStarted = True;
+      Log("[DiscordLink]: UTComp is detected but warmup is disabled, starting the game");
 	  Log("[DiscordLink]: bMatchStarted:"@bUTCompWarmUpStarted);
     }
   }
@@ -910,29 +964,29 @@ function ScoreEvent(PlayerReplicationInfo Who, float Points, string Desc)
 
   if (!bMatchStarted)
 	return;
-	
+
   GRI = Level.Game.GameReplicationInfo;
-  
+
   if (Level.Game.bTeamGame){
     UpdateScores();
   }
-  
+
 //  log("ScoreEvent:"$Desc);
   if (Desc == "flag_cap_final"){
     DRP.SendMSG("CTFFC"$TimeStamp()$";"$RedScore$";"$BlueScore$";"$Who.PlayerName$";"$Who.Team.TeamName$";"$Who.Team.TeamIndex);
   }
- 
+
   if (Desc == "ball_cap_final"){
     DRP.SendMSG("BRTCD"$TimeStamp()$";"$RedScore$";"$BlueScore$";"$Who.PlayerName$";"$Who.Team.TeamName$";"$Who.Team.TeamIndex);
   }
   if (Desc == "ball_thrown_final"){
     DRP.SendMSG("BRTSS"$TimeStamp()$";"$RedScore$";"$BlueScore$";"$Who.PlayerName$";"$Who.Team.TeamName$";"$Who.Team.TeamIndex);
   }
-  
+
   if (OLSLogger!=None){
     OLSLogger.ScoreEvent(Who,Points,Desc);
-  } 
-  
+  }
+
 }
 
 
@@ -943,17 +997,17 @@ function ScoreEvent(PlayerReplicationInfo Who, float Points, string Desc)
 function TeamScoreEvent(int Team, float Points, string Desc)
 {
   local int opponent, l;
-  
+
   if (OLSLogger!=None){
     OLSLogger.TeamScoreEvent(Team,Points,Desc);
-  }   
+  }
 
   if (!bMatchStarted || Desc ~= "tdm_frag" || Desc ~= "team_frag" )
 	return;
-  
-  GRI = Level.Game.GameReplicationInfo;  
+
+  GRI = Level.Game.GameReplicationInfo;
   UpdateScores();
-  
+
   // getting opponent index
   if (team == 0){
     opponent = 1;
@@ -977,7 +1031,7 @@ function TeamScoreEvent(int Team, float Points, string Desc)
     else{
       GameWinningGoalScorer = PotentialBlueScorers.Scorer;
     }
-	
+
   }
 // ===========================================================================
 // This section of function is under construction;
@@ -1089,15 +1143,15 @@ function TeamScoreEvent(int Team, float Points, string Desc)
   }
 
 
-  log("[DiscordLink] TeamScoreEvent:"$Desc);	
+  log("[DiscordLink] TeamScoreEvent:"$Desc);
   if (Desc ~= "enemy_core_destroyed"){
 	DRP.SendMSG("ONSCD"$TimeStamp()$";"$RedScore$";"$BlueScore$";"$Team$";"$GRI.Teams[Team].TeamName);
   }
-  
+
   if (Desc ~= "round_win"){
 	DRP.SendMSG("TGRND"$TimeStamp()$";"$RedScore$";"$BlueScore$";"$Team$";"$GRI.Teams[Team].TeamName);
   }
-  
+
   if (Desc ~= "pair_of_round_winner"){
     ASGRI = ASGameReplicationInfo(GRI);
 	DRP.SendMSG("ASRDW"$TimeStamp()$";"$RedScore$";"$BlueScore$";"$Team$";"$ASGRI.GetRoundWinnerString());
@@ -1115,17 +1169,17 @@ function SpecialEvent(PlayerReplicationInfo Who, string Desc)
 {
   if (OLSLogger!=None){
     OLSLogger.SpecialEvent(Who,Desc);
-  } 
+  }
 
   if (!bMatchStarted)
 	  return;
-	  
+
   if (Desc ~= "multikill_7"){
 	DRP.SendMSG("PSEHS"$TimeStamp()$";"$Who.PlayerName);
   }
   if (Desc ~= "spree_5"){
 	DRP.SendMSG("PSEGL"$TimeStamp()$";"$Who.PlayerName);
-  }  
+  }
 }
 
 // ============================================================================
@@ -1208,10 +1262,15 @@ function Timer(){
         PotentialRedScorers.SecondAssistant = None;
     }
   }
-  
+
   // overtime check
   if (Level.Game.bOverTime && !bWasOvertime){
-   DRP.SendMSG("GENOT"$Timestamp()$";"$int(GRI.Teams[0].Score)$";"$int(GRI.Teams[1].Score)); // we still need to send timestamp as it's used by the Py server deduplication feature
+    if (Level.Game.bTeamGame){
+      DRP.SendMSG("TBMOT"$Timestamp()$";"$int(GRI.Teams[0].Score)$";"$int(GRI.Teams[1].Score)); // we still need to send timestamp as it's used by the Py server deduplication feature
+    }
+    else {
+      DRP.SendMSG("GENOT"$Timestamp()$";"$int(GRI.Teams[0].Score)$";"$int(GRI.Teams[1].Score)); // we still need to send timestamp as it's used by the Py server deduplication feature
+    }
    bOvertime = true;
    bWasOvertime = true;
   }
@@ -1236,19 +1295,19 @@ function GameEvent(string GEvent, string Desc, PlayerReplicationInfo Who){
 
   if (OLSLogger!=None){
     OLSLogger.GameEvent(GEvent,Desc,Who);
-  } 
-  
+  }
+
   // AS times are not straightforward, as we care about the round time and not time since match started.
   if (ASGameInfo(Level.Game) != None && bMatchStarted) {
     ASGRI = ASGameReplicationInfo(GRI);
-    
-	RoundTime = Max(0, ASGameInfo(Level.Game).RoundStartTime - ASGameInfo(Level.Game).RemainingTime);	
+
+	RoundTime = Max(0, ASGameInfo(Level.Game).RoundStartTime - ASGameInfo(Level.Game).RemainingTime);
     if ( ASGRI.RoundWinner != ERW_None )
 	  RoundTime = ASGRI.RoundOverTime;
 
     sRoundTime = FormatTime(RoundTime, True);
   }
-  
+
   if (GEvent == "flag_taken" && bMatchStarted){
     if (Desc == "1"){ // see note above
       myTeams[0].TimesTouchedFlag++;
@@ -1257,66 +1316,83 @@ function GameEvent(string GEvent, string Desc, PlayerReplicationInfo Who){
       myTeams[1].TimesTouchedFlag++;
     }
   }
-  
+
   if (GEvent == "ObjectiveCompleted_Trophy" && bMatchStarted){
     // workaround to filter out the first two fields we don't need out of a precompiled objective string in World Stats Logger format, that uses SPACES for separators to get a human readable name of the objective
 	Split(Desc, " ", AS_Objective);
 	for (i=2; i<AS_Objective.Length; i++){
 	  Objective = Objective@AS_Objective[i];
 	}
-	DRP.SendMSG("ASEVT"$sRoundTime$";"$Who.PlayerName$";"$Who.Team.TeamName$";"$Who.Team.TeamIndex$";"$Objective);	
-  }  
+	UpdateASObjList(Who.Team.TeamIndex,Objective,RoundTime);
+	DRP.SendMSG("ASEVT"$sRoundTime$";"$Who.PlayerName$";"$Who.Team.TeamName$";"$Who.Team.TeamIndex$";"$Objective);
+  }
+
+  if ((GEvent == "AS_attackers_win" || GEvent == "AS_defenders_win") && bMatchStarted){
+     if (GEvent == "AS_attackers_win" && Desc == "0")
+       DRP.SendMSG("ASRDE"$sRoundTime$";"$Desc$";Red team successfully attacked");
+     if (GEvent == "AS_attackers_win" && Desc == "1")
+       DRP.SendMSG("ASRDE"$sRoundTime$";"$Desc$";Blue team successfully attacked");
+     if (GEvent == "AS_defenders_win" && Desc == "0")
+       DRP.SendMSG("ASRDE"$sRoundTime$";"$Desc$";Red team successfully defended");
+     if (GEvent == "AS_defenders_win" && Desc == "1")
+       DRP.SendMSG("ASRDE"$sRoundTime$";"$Desc$";Blue team successfully defended");
+  }
 }
 
 function EndGame(string Reason)
 {
   local int i,j;
-  local string RedPlayers;
-  local string BluePlayers;
-  local string RedScores;
-  local string BlueScores;
-  local string RedCaptures;
-  local string BlueCaptures;
-  local string RedEff;
-  local string BlueEff;  
+  local string RedPlayers, BluePlayers;
+  local string RedScores, BlueScores;
+  local string RedCaptures, BlueCaptures;
+  local string RedObjectives, BlueObjectives;
+  local string RedEff, BlueEff;
   local string ThreeStars;
-  local string RedScoreAttempts;  
-  local string BlueScoreAttempts;
+  local string RedScoreAttempts, BlueScoreAttempts;
   local string Heading;
   local string FinalScore;
   local string Scorers;
+  local string Objectives, RedTimes, BlueTimes;
   local string matchinfo;
   local string LastScorer;
   local array<PlayerReplicationInfo> PRIs;
   local PlayerReplicationInfo PRI,t;
-  
-  
+
+
   if (OLSLogger!=None){
     OLSLogger.EndGame(Reason);
-  }   
-  
-  Log("[DiscordLink] Match ended");
-  
-  if ( Reason ~= "mapchange" || Reason ~= "serverquit" ){
+  }
+
+  if ( (Reason ~= "mapchange" && !ReportOnMapChange() )|| Reason ~= "serverquit" ){
     Log("[DiscordLink] EndGame reason is"@Reason$", not sending a report");
 	return;
   }
-	
-  ASGRI = ASGameReplicationInfo(GRI);
-  
+
+  if (!bMatchStarted){
+    Log("[DiscordLink] Match hasn't started, not sending a report");
+	return;
+
+  }
+
+  Log("[DiscordLink] Match ended");
+
+  if (ASGameInfo(Level.Game) != None){
+    ASGRI = ASGameReplicationInfo(GRI);
+  }
+
   if (GRI.Teams[0].Score > GRI.Teams[1].Score){
     Winners = GRI.Teams[0];
   }
   else{
     Winners = GRI.Teams[1];
   }
-    
+
   SetTimer(0.5, false);
   if (CTFGame(Level.Game) != None){
     LastScorer = Goals[Goals.Length-1].Scorer.PlayerName;
   }
   matchinfo = TodayHourServerMap();
-	
+
     // Quick cascade sort.
   for (i=0;i<GRI.PRIArray.Length;i++)
   {
@@ -1343,7 +1419,7 @@ function EndGame(string Reason)
       i = i - 1;
     }
   }
-  
+
   // Populating the end-game tables
   if (Level.Game.bTeamGame){
 	for (i = 0; i<PRIs.Length; i++){
@@ -1352,7 +1428,10 @@ function EndGame(string Reason)
             RedPlayers = RedPlayers$PRIs[i].PlayerName$"%";
             RedScores = RedScores$int(PRIs[i].Score)$"%";
 			RedCaptures = RedCaptures$PRIs[i].GoalsScored$"%";
-			RedEff = RedEff$(PRIs[i].Kills/PRIs[i].Deaths)$"%";
+			RedEff = RedEff$Max(PRIs[i].Kills/PRIs[i].Deaths,0)$"%";
+			if (ASGameInfo(Level.Game) != None){
+   			   RedObjectives = RedObjectives$ASPlayerReplicationInfo(PRIs[i]).DisabledObjectivesCount$"%";
+			}
         }
 	  }
 	  else if (PRIs[i].Team.TeamIndex == 1){
@@ -1360,11 +1439,14 @@ function EndGame(string Reason)
             BluePlayers = BluePlayers$PRIs[i].PlayerName$"%";
             BlueScores = BlueScores$int(PRIs[i].Score)$"%";
 			BlueCaptures = BlueCaptures$PRIs[i].GoalsScored$"%";
-			BlueEff = BlueEff$(PRIs[i].Kills/PRIs[i].Deaths)$"%";
+			BlueEff = BlueEff$Max(PRIs[i].Kills/PRIs[i].Deaths,0)$"%";
+			if (ASGameInfo(Level.Game) != None){
+   			   BlueObjectives = BlueObjectives$ASPlayerReplicationInfo(PRIs[i]).DisabledObjectivesCount$"%";
+			}
         }
       }
 	}
-	
+
 	if(CTFGame(Level.Game) != None && bPostCapSummary){
 		for (i=0; i < Goals.Length; i++){
 			if (Goals[i].FirstAssistant == Goals[i].Scorer)
@@ -1383,7 +1465,7 @@ function EndGame(string Reason)
 			else{
 				Scorers = Scorers$Goals[i].Timestamp$" **"$Goals[i].CurrentScore$"** "$Goals[i].Scorer.PlayerName$" (Unassisted)%";
 			}
-		}	  
+		}
 	}
 
 	RedScoreAttempts = int(myTeams[0].thisTeam.Score)$"/"$myTeams[0].TimesTouchedFlag$"  ("$GetPercentage(myTeams[0].thisTeam.Score, float(myTeams[0].TimesTouchedFlag))$")";
@@ -1397,6 +1479,17 @@ function EndGame(string Reason)
 	   FinalScore = FinalScore$" OT";
 	}
 
+    if (ASGameInfo(Level.Game) != None && bPostObjSummary){
+    Log("[DiscordLink] Compiling objective summary:");
+ 	for (i=0; i<ASObjectives.Length; i++){
+ 	    Log("[DiscordLink] Compiling objective summary:"@ASObjectives[i].ObjDescription@ASObjectives[i].RedTime$"/"$ASObjectives[i].BlueTime);
+        Objectives = Objectives$ASObjectives[i].ObjDescription$"%";
+        RedTimes =  RedTimes$ASObjectives[i].RedTime$"%";
+        BlueTimes = BlueTimes$ASObjectives[i].BlueTime$"%";
+
+    }
+  }
+
   }
   else{ // not a Teamgame
     for (i = 0; i<PRIs.Length; i++){
@@ -1407,10 +1500,8 @@ function EndGame(string Reason)
       }
     }
   }
-  
-  // rough attempt to fix what I assume is a stomp on sending data that happens if the last BR/CTF capture was in OT or hit goal score that prevents both the cap and summaary being posted. This probably needs to be fixed in the mutator code itself where it processes the queue.
 
-	  
+
   if(CTFGame(Level.Game) != None){
 	Log("[DiscordLink] Sending CTF Summary");
 	if (bPostCapSummary)
@@ -1419,38 +1510,38 @@ function EndGame(string Reason)
 		DRP.SendMSG("CTFES"$Rand(1000)$";"$Winners.TeamIndex$";"$FinalScore$";"$Heading$";"$ThreeStars$";"$RedScoreAttempts$";"$BlueScoreAttempts$";"$RedPlayers$";"$BluePlayers$";"$RedScores$";"$BlueScores$";"$RedCaptures$";"$BlueCaptures$";"$matchinfo);
 	return;
   }
-  
+
   if(ASGameInfo(Level.Game) != None){
 	Log("[DiscordLink] Sending AS Summary");
-//	if (bPostObjSummary)
-//		DRP.SendMSG("ASMES"$Rand(1000)$";"$Winners.TeamIndex$";"$FinalScore$";"$ThreeStars$";"$RedPlayers$";"$BluePlayers$";"$RedScores$";"$BlueScores$";"$RedEff$";"$BlueEff$";"$matchinfo$";"$Objectives);
+	if (bPostObjSummary)
+		DRP.SendMSG("ASMES"$Rand(1000)$";"$Winners.TeamIndex$";"$FinalScore$";"$ThreeStars$";"$RedPlayers$";"$BluePlayers$";"$RedScores$";"$BlueScores$";"$RedObjectives$";"$BlueObjectives$";"$matchinfo$";"$Winners.TeamName@"wins the match!"$";"$Objectives$";"$RedTimes$";"$BlueTimes);
 //		DRP.SendMSG("ASMES"$Rand(1000)$";"$Winners.TeamIndex$";"$FinalScore$";"$ThreeStars$";"$RedPlayers$";"$BluePlayers$";"$RedScores$";"$BlueScores$";"$RedEff$";"$BlueEff$";"$matchinfo$";"$ASGRI.GetRoundWinnerString());
-//	else
-	DRP.SendMSG("ASMES"$Rand(1000)$";"$Winners.TeamIndex$";"$FinalScore$";"$ThreeStars$";"$RedPlayers$";"$BluePlayers$";"$RedScores$";"$BlueScores$";"$RedEff$";"$BlueEff$";"$matchinfo$";"$Winners.TeamName@"wins the match!");
+	else
+	DRP.SendMSG("ASMES"$Rand(1000)$";"$Winners.TeamIndex$";"$FinalScore$";"$ThreeStars$";"$RedPlayers$";"$BluePlayers$";"$RedScores$";"$BlueScores$";"$RedObjectives$";"$BlueObjectives$";"$matchinfo$";"$Winners.TeamName@"wins the match!");
 	return;
   }
-  
-  
+
+
   if (xBombingRun(Level.Game) != None){
   	Log("[DiscordLink] Sending BR Summary");
     DRP.SendMSG("BRMES"$Rand(1000)$";"$Winners.TeamIndex$";"$FinalScore$";"$ThreeStars$";"$RedPlayers$";"$BluePlayers$";"$RedScores$";"$BlueScores$";"$RedCaptures$";"$BlueCaptures$";"$matchinfo);
-	return;	
-  }  
-  
+	return;
+  }
+
   if (Level.Game.bTeamGame){
     Log("[DiscordLink] Sending generic team game Summary");
     DRP.SendMSG("TDMES"$Rand(1000)$";"$Winners.TeamIndex$";"$FinalScore$";"$RedPlayers$";"$BluePlayers$";"$RedScores$";"$BlueScores$";"$RedEff$";"$BlueEff$";"$matchinfo);
-	return;	
+	return;
   }
-  
+
   if(xDeathmatch(Level.Game) != None){
     Log("[DiscordLink] Sending generic team game Summary");
 	DRP.SendMSG("DMMES"$Rand(1000)$";"$PRIs[0].PlayerName$";"$RedPlayers$";"$RedScores$";"$RedEff$";"$matchinfo);
-	return;	
+	return;
   }
 
-  
-  
+
+
 }
 
 event Destroyed()

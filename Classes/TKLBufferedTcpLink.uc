@@ -121,5 +121,5 @@ function bool Close()
 
 defaultproperties
 {
-   
+
 }
