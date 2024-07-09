@@ -5,7 +5,7 @@
 //  Game Stats Class that hooks events and digests them for sending to Discord webhook.
 //  Loosely based on old GameLogger code
 //-----------------------------------------------------------------------------
-//  by Michael "_Lynx" Sokolkov © 2004-2023
+//  by Michael "_Lynx" Sokolkov ï¿½ 2004-2023
 // ============================================================================
 class LGameStats extends GameStats config;
 
@@ -1428,7 +1428,7 @@ function EndGame(string Reason)
             RedPlayers = RedPlayers$PRIs[i].PlayerName$"%";
             RedScores = RedScores$int(PRIs[i].Score)$"%";
 			RedCaptures = RedCaptures$PRIs[i].GoalsScored$"%";
-			RedEff = RedEff$Max(PRIs[i].Kills/PRIs[i].Deaths,0)$"%";
+			RedEff = RedEff$Max(PRIs[i].Kills/Min(PRIs[i].Deaths,1),0)$"%";
 			if (ASGameInfo(Level.Game) != None){
    			   RedObjectives = RedObjectives$ASPlayerReplicationInfo(PRIs[i]).DisabledObjectivesCount$"%";
 			}
@@ -1439,7 +1439,7 @@ function EndGame(string Reason)
             BluePlayers = BluePlayers$PRIs[i].PlayerName$"%";
             BlueScores = BlueScores$int(PRIs[i].Score)$"%";
 			BlueCaptures = BlueCaptures$PRIs[i].GoalsScored$"%";
-			BlueEff = BlueEff$Max(PRIs[i].Kills/PRIs[i].Deaths,0)$"%";
+			BlueEff = BlueEff$Max(PRIs[i].Kills/Min(PRIs[i].Deaths,1),0)$"%";
 			if (ASGameInfo(Level.Game) != None){
    			   BlueObjectives = BlueObjectives$ASPlayerReplicationInfo(PRIs[i]).DisabledObjectivesCount$"%";
 			}
@@ -1496,7 +1496,7 @@ function EndGame(string Reason)
       if ( PRIs[i].PlayerName != "WebAdmin" && !PRIs[i].bOnlySpectator ){
           RedPlayers = RedPlayers$PRIs[i].PlayerName$"%";
           RedScores = RedScores$PRIs[i].Kills$"%";
-		  RedEff = RedEff$(PRIs[i].Kills/PRIs[i].Deaths)$"%";
+		  RedEff = RedEff$(PRIs[i].Kills/Min(PRIs[i].Deaths,1))$"%";
       }
     }
   }
